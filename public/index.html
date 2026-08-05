@@ -632,11 +632,20 @@
             <div class="detail-item">Affected Poles: <span>${t.affected_pole_count}</span></div>
             <div class="detail-item">Confidence: <span>${(t.confidence * 100).toFixed(0)}%</span></div>
           </div>
+          ${t.ai_briefing ? `
+            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--panel-border); border-radius: 4px; padding: 10px; margin-bottom: 12px; font-size: 11px; line-height: 1.4; color: #CBD5E1;">
+              <div style="font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: #38BDF8; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                <span>🤖 AI DISPATCH BRIEFING</span>
+                <span style="color: var(--text-muted); font-weight: 400;">(${t.briefing_source || 'Gemini LLM'})</span>
+              </div>
+              <div>${t.ai_briefing}</div>
+            </div>
+          ` : ''}
           <div class="ticket-actions">
-            ${t.status === 'DETECTED' ? `<button class="btn btn-primary" onclick="updateStatus(${t.ticket_id}, 'acknowledge')">Acknowledge</button>` : ''}
-            ${t.status === 'ACKNOWLEDGED' ? `<button class="btn btn-primary" onclick="updateStatus(${t.ticket_id}, 'assign-crew')">Assign Crew</button>` : ''}
-            ${t.status === 'CREW_ASSIGNED' ? `<button class="btn btn-primary" onclick="updateStatus(${t.ticket_id}, 'resolve')">Mark Resolved</button>` : ''}
-            <button class="btn btn-success" onclick="verifyTicket(${t.ticket_id})">Verify Telemetry</button>
+            ${t.status === 'DETECTED' ? `<button class="btn btn-primary" onclick="event.stopPropagation(); updateStatus(${t.ticket_id}, 'acknowledge')">Acknowledge</button>` : ''}
+            ${t.status === 'ACKNOWLEDGED' ? `<button class="btn btn-primary" onclick="event.stopPropagation(); updateStatus(${t.ticket_id}, 'assign-crew')">Assign Crew</button>` : ''}
+            ${t.status === 'CREW_ASSIGNED' ? `<button class="btn btn-primary" onclick="event.stopPropagation(); updateStatus(${t.ticket_id}, 'resolve')">Mark Resolved</button>` : ''}
+            <button class="btn btn-success" onclick="event.stopPropagation(); verifyTicket(${t.ticket_id})">Verify Telemetry</button>
           </div>
         </div>
       `).join('');

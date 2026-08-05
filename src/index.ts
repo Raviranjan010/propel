@@ -1,9 +1,19 @@
 import { startServer } from './server';
-import { getDb, initDbSchema } from './db';
+import { initDbSchema } from './db';
+import { generateAndSeedData } from './db/seed';
 import { buildAllTopologies } from './services/topologyBuilder';
 
 async function main() {
+  console.log('Initializing database schema...');
   await initDbSchema();
+
+  console.log('Seeding synthetic grid network dataset...');
+  await generateAndSeedData();
+
+  console.log('Building network topology graphs...');
+  await buildAllTopologies();
+
+  console.log('Starting KSPDB SCADA Server...');
   startServer();
 }
 

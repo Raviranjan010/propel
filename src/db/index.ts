@@ -33,7 +33,29 @@ export async function getDb() {
 
 export async function initDbSchema() {
   const db = await getDb();
-  const schemaSql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf-8');
+  
+  const candidatePaths = [
+    path.join(__dirname, 'schema.sql'),
+    path.join(process.cwd(), 'src', 'db', 'schema.sql'),
+    path.join(process.cwd(), 'dist', 'db', 'schema.sql'),
+    path.join(__dirname, '..', '..', 'src', 'db', 'schema.sql')
+  ];
+
+  let schemaSql = '';
+  let loadedPath = '';
+
+  for (const p of candidatePaths) {
+    if (fs.existsSync(p)) {
+      schemaSql = fs.readFileSync(p, 'utf-8');
+      loadedPath = p;
+      break;
+    }
+  }
+
+  if (!schemaSql) {
+    throw new Error(`schema.sql not found in candidate locations: ${candidatePaths.join(', ')}`);
+  }
+
   const statements = schemaSql
     .split(/;\s*$/m)
     .map(s => s.trim())

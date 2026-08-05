@@ -19,8 +19,8 @@ export async function getDb() {
     };
   } else {
     if (!pgliteInstance) {
-      // Local disk-backed PGlite instance for single-container & local execution
-      pgliteInstance = new PGlite('./.pglite_data');
+      const dataDir = process.env.PGDATA_PATH;
+      pgliteInstance = dataDir ? new PGlite(dataDir) : new PGlite();
     }
     return {
       query: async (text: string, params?: any[]) => {

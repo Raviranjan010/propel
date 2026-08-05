@@ -26,20 +26,20 @@ async function runSelfCheckVerification() {
   console.log(`Active Tickets Count: ${activeTickets1.length}`);
   console.log('Ticket Sample:', JSON.stringify(activeTickets1[0], null, 2));
 
-  // ITEM 3: Three Simultaneous Faults
+  // ITEM 3: Three Simultaneous Faults (on 3 distinct DTs)
   console.log('\n--- ITEM 3: Three Simultaneous Faults ---');
   await generateAndSeedData();
   await buildAllTopologies();
 
   await request(app).post('/api/simulator/inject-fault').send({ fault_type: 'SPAN', target_id: 'P-000010' });
-  await request(app).post('/api/simulator/inject-fault').send({ fault_type: 'SPAN', target_id: 'P-000100' });
   await request(app).post('/api/simulator/inject-fault').send({ fault_type: 'SPAN', target_id: 'P-000200' });
+  await request(app).post('/api/simulator/inject-fault').send({ fault_type: 'SPAN', target_id: 'P-000500' });
 
   const ticketsRes2 = await request(app).get('/api/tickets');
   const activeTickets2 = ticketsRes2.body.filter((t: any) => t.status !== 'CLOSED');
   console.log(`Active Tickets Count for 3 Injections: ${activeTickets2.length}`);
   activeTickets2.forEach((t: any, i: number) => {
-    console.log(`Ticket ${i+1}: ID=${t.ticket_id}, DownstreamAsset=${t.downstream_asset_id}, FaultType=${t.fault_type}, PIN=${t.pincode}`);
+    console.log(`Ticket ${i+1}: ID=${t.ticket_id}, DownstreamAsset=${t.downstream_asset_id}, DT=${t.dt_id}, FaultType=${t.fault_type}, PIN=${t.pincode}`);
   });
 
   // ITEM 4: Heartbeat Timeout / Missing Telemetry (Power Still On)

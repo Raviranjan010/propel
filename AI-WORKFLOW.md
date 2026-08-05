@@ -8,12 +8,12 @@ This document details the AI-augmented development workflow, tool selection, del
 
 | Tool | Primary Purpose | Scope of Work |
 | :--- | :--- | :--- |
-| **Claude 3.5 Sonnet / Opus** | Architecture RFCs, Graph Algorithms & Ingestion Pipeline | Authoring RFCs, writing the boundary frontier algorithm, PostGIS queries, and edge-case handling. |
-| **Cursor AI / Antigravity Agent** | Code Generation & Full-Stack Component Building | Boilerplate, React Mapbox UI components, FastAPI endpoints, and Docker compose environment. |
+| **Claude 3.5 Sonnet / Opus** | Architecture RFCs, Graph Algorithms & Ingestion Pipeline | Authoring RFCs, writing the boundary frontier algorithm, PostgreSQL queries, and edge-case handling. |
+| **Cursor AI / Antigravity Agent** | Code Generation & Full-Stack Component Building | Express REST endpoints, HTML/JS Canvas UI components, and Docker compose environment. |
 | **Gemini 1.5 Pro / 3.6 Flash** | Synthesis, Evaluation Suites & Documentation | Generating synthetic telemetry seeds, test assertion suites, and user documentation. |
 
 ### Division of Responsibility
-- **Delegated to AI (Wholesale):** React CSS styling, Mapbox layer rendering hooks, REST CRUD boilerplate, synthetic data seeding scripts, and Dockerfile configurations.
+- **Delegated to AI (Wholesale):** SCADA CSS styling, HTML5 Canvas map rendering, Express REST CRUD boilerplate, synthetic data seeding scripts, and Dockerfile configurations.
 - **Hand-Authored / Rigorously Reviewed:** The core graph boundary localization algorithm, spatial minimum spanning tree fallback logic for 60% missing topology, telemetry deduplication logic, and automated restoration verification rules.
 
 ---

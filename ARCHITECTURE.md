@@ -14,21 +14,21 @@ flowchart TD
         P_FW12[FW 1.2 Device] -->|Silent Death - Missed Heartbeat| IngestAPI
     end
 
-    subgraph Ingestion Layer [FastAPI / Node.js Ingestion Pipeline]
-        IngestAPI[HTTPS Telemetry Ingestion Endpoint]
-        Deduper[Redis Sliding Window De-duplicator & Seq Buffer]
+    subgraph Ingestion Layer [Express Ingestion Pipeline]
+        IngestAPI[HTTP Telemetry Ingestion Endpoint]
+        Deduper[PostgreSQL Event Lookup & Seq Deduplicator]
         IngestAPI --> Deduper
     end
 
-    subgraph Storage & Topology Engine [PostgreSQL + PostGIS + Network Graph]
-        DB[(PostgreSQL + PostGIS)]
+    subgraph Storage & Topology Engine [PostgreSQL Database + Network Graph]
+        DB[(PostgreSQL Database)]
         GraphEngine[In-Memory Directed Tree Topology Engine]
         Deduper -->|Clean Event Stream| GraphEngine
         DB <--> GraphEngine
     end
 
     subgraph Analysis & Localization Kernel
-        SchedFeed[Scheduled Outage Feed Mock API]
+        SchedFeed[Scheduled Outages DB Table]
         NoiseFilter[Noise & Dead-Sensor Discriminator]
         LocAlgo[Boundary Frontier Localization Engine]
         
@@ -39,11 +39,11 @@ flowchart TD
 
     subgraph Lifecycle & Operator Interface
         TicketEngine[Ticket Lifecycle & Auto-Verification Engine]
-        OperatorUI[React + Mapbox Control Room Console]
-        AICopilot[LLM Operator Dispatch Copilot - Gemini/Claude]
+        OperatorUI[Static HTML/JS Canvas Console - public/index.html]
+        AICopilot[LLM Operator Dispatch Copilot - Gemini/Groq]
 
         LocAlgo --> TicketEngine
-        TicketEngine -->|WebSocket Updates| OperatorUI
+        TicketEngine -->|HTTP 3s Polling| OperatorUI
         TicketEngine -->|Incident Summary Request| AICopilot
         AICopilot -->|Natural Language Briefing| OperatorUI
     end
@@ -58,11 +58,11 @@ flowchart TD
 - **Monsoon Outage Burst:** Up to 5,000 telemetry messages in 10 seconds ($\mathbf{500\text{ msgs/sec}}$ spike).
 
 ### Ingestion Strategy
-1. **Async HTTP Queue:** Ingestion endpoints accept payloads immediately, returning `202 Accepted` in $<15\text{ms}$.
-2. **De-duplication & Ordering:**
-   - Primary key for deduplication: `hash(device_id, seq)`. Retained in Redis sliding set with a 6-hour TTL (matching device retry limits).
-   - Clock Skew Handling: Timestamp $ts$ from devices can skew up to $\pm 90$s. The system relies on **server ingress timestamp** for windowing, while using device monotonic sequence number `seq` to enforce local temporal ordering per device.
-3. **Firmware 1.2 Handling:** FW 1.2 devices (~8% fleet) do not send `power_lost`. A background watchdog flags devices missing 2 consecutive heartbeats ($30\text{ mins}$) as *Potentially Dark*, triggering a topological probe of surrounding poles.
+1. **Async HTTP Ingestion:** Ingestion endpoint `POST /api/telemetry` accepts payloads immediately, returning `202 Accepted` in $<15\text{ms}$.
+2. **De-duplication & Ordering in PostgreSQL:**
+   - Primary key for deduplication: lookup on `(device_id, seq)` in `telemetry_events` table via `SELECT id FROM telemetry_events WHERE device_id = $1 AND seq = $2`. If existing record is found, event returns `duplicate_ignored` with `reLocalized: false`.
+   - Sequence Ordering Check: Sequence order is enforced by checking `SELECT MAX(seq) as max_seq FROM telemetry_events WHERE device_id = $1`. Only if `payload.seq >= max_seq` does the system update the pole's `is_energized` status in PostgreSQL.
+3. **State Sync & Re-Localization Trigger:** When `is_energized` state changes, `syncFaultsAndTicketsForDt(dtId)` is executed for the affected transformer, updating active tickets and closing resolved tickets automatically.
 
 ---
 
@@ -72,76 +72,59 @@ The low-tension distribution network is physically a **radial tree**: Substation
 
 ### Internal Graph Schema
 ```typescript
-interface NetworkGraph {
-  nodes: Map<PoleID, PoleNode>;
-  adjList: Map<PoleID, PoleID[]>; // Parent -> Children
-  reverseAdj: Map<PoleID, PoleID>; // Child -> Parent
-}
-
-interface PoleNode {
-  poleId: string;
-  lat: number;
-  lon: number;
-  dtId: string;
-  feederId: string;
-  isEnergized: boolean;
-  lastSeen: Date;
-  seqOnLine?: number;
-  parentPoleId?: string;
-  topologyConfidence: 'EXACT_SURVEY' | 'INFERRED_MST' | 'CLUSTER_BOUND';
+interface TopologyEdge {
+  dt_id: string;
+  parent_pole_id: string; // DT id or pole_id
+  child_pole_id: string;
+  distance_meters: number;
+  source: 'explicit' | 'inferred';
+  confidence: number;
 }
 ```
 
 ### The 60% Missing Topology Solution
-For 60% of transformers, `seq_on_line` and `parent_pole_id` are null. We employ a 3-tier hybrid strategy:
+For 60% of transformers, `seq_on_line` and `parent_pole_id` are null.
 
-1. **Spatial Delaunay / Minimum Spanning Tree (MST):**
-   Given exact GPS coordinates of the DT and its connected poles, we build a spatial Euclidean tree rooted at the DT location. Since physical overhead wires follow shortest geographic routes along roads, MST accurately reconstructs tree topology for ~82% of unmapped suburban radial lines.
-2. **Co-Outage Graph Learning:**
-   During historical outages, poles on the same branch experience power loss simultaneously ($\Delta t < 30\text{s}$). We compute a weighted correlation matrix $C_{ij}$ representing historical co-outage frequency to refine and confirm branch structures over time.
-3. **Graceful Degraded Output:**
-   Where geographic density creates ambiguity (e.g. dense spurs), the algorithm marks `topologyConfidence: 'CLUSTER_BOUND'`. Instead of pinpointing a single line span, the UI renders a **High-Probability Span Corridor** with a bounding box and explicit confidence score (e.g., $75\%$ confidence, span P-102 to P-105).
+Instead of manual surveys, `topologyBuilder.ts` employs a **greedy nearest-neighbor tree construction algorithm** grown outward from the Distribution Transformer (DT) coordinates:
+
+1. **Root Connection:** The DT geographic coordinates `(lat, lon)` serve as the initial root of the connected tree node map `connectedNodes`.
+2. **Greedy Frontier Expansion:** At each step, the algorithm computes the Haversine distance between every already-connected node and every unconnected pole under the transformer, selecting the shortest geographic edge `bestDist`.
+3. **Proximity Confidence Decay:** Edge confidence decays with longer inter-pole distance according to the exact code formula:
+   ```typescript
+   const confidence = Math.max(0.40, Math.min(0.90, Math.round((1.0 - (bestDist / 250.0)) * 100) / 100));
+   ```
+4. **Edge Classification:** Edges built using recorded survey data receive `source: 'explicit'` with `confidence: 1.0`. Edges constructed via nearest-neighbor inference receive `source: 'inferred'` with distance-decayed confidence (`0.40` to `0.90`).
 
 ---
 
 ## 4. Fault Localization Algorithm
 
-### Boundary Frontier Discovery
-A fault is an **edge failure** inferred from node states. The core algorithm walks the topology tree to locate the **Live-to-Dark Frontier**:
+### Plain-English Walkthrough of `localizeFaults()` in `localization.ts`
 
-$$\text{Faulted Span } (P_{\text{upstream}}, P_{\text{downstream}}) \quad \text{where } \text{State}(P_{\text{upstream}}) = \text{LIVE} \land \text{State}(P_{\text{downstream}}) = \text{DARK}$$
+The core localization engine in `src/services/localization.ts` evaluates pole telemetry states against network topology trees through a 4-step sequence:
 
-```python
-def localize_faults(dt_id: str, pole_states: Dict[str, bool]) -> List[FaultIncident]:
-    incidents = []
-    dark_roots = []
-    
-    # 1. Find root dark poles (dark pole whose parent is live or DT)
-    for pole in get_poles_by_dt(dt_id):
-        if not pole_states[pole.id]: # DARK
-            parent = get_parent(pole.id)
-            if parent is None or pole_states[parent.id] == True: # Parent is LIVE or DT
-                dark_roots.append(pole)
+1. **Active Scheduled Outage Filtering:**
+   Cross-references incoming outages with active entries in `scheduled_outages` where `start_time <= now <= end_time`. Outages matching a target feeder or transformer DT are added to suppression sets `activeScheduledFeeders` and `activeScheduledDts`, suppressing downstream incident tickets.
 
-    # 2. Group downstream dark clusters into single incidents
-    for root in dark_roots:
-        downstream_poles = get_all_downstream(root.id)
-        confidence = calculate_confidence(root, downstream_poles)
-        incidents.append(FaultIncident(
-            upstream_pole_id=get_parent(root.id) or f"DT-{dt_id}",
-            downstream_pole_id=root.id,
-            affected_pole_count=len(downstream_poles) + 1,
-            coordinates=midpoint(root.coords, get_parent_coords(root)),
-            pincode=root.pincode or reverse_geocode(root.coords),
-            confidence=confidence
-        ))
-    return incidents
-```
+2. **Feeder-level Outage Detection:**
+   Checks all poles under each feeder. If every pole under a feeder is un-energized and not covered by a scheduled outage, a single `FEEDER` blackout ticket is created at confidence `1.0`.
+
+3. **DT-level Outage Detection:**
+   Checks all poles under each Distribution Transformer. If every pole under a DT is un-energized (and not covered by feeder outage or scheduled outage), a single `DT` transformer outage ticket is created.
+
+4. **Dead-Sensor Discrimination (`hasEnergizedDescendants`):**
+   Scans un-energized poles. If a dark pole has at least one energized downstream child in its subtree (computed recursively via `hasEnergizedDescendants(nodeId)`), it is flagged as a `DEAD_SENSOR` (broken IoT modem/lamp fuse) rather than a line fault.
+
+5. **Live/Dark Boundary Frontier Walk:**
+   Iterates through topology edges to identify **frontier boundary edges** `(parent, child)` where `isNodeLive(parent) == true` and `isNodeLive(child) == false`. For each frontier root:
+   - Computes the geographical midpoint `(lat, lon)` between parent and child node.
+   - Recursively traverses all downstream children under the dark root to count total affected poles.
+   - Creates a localized `SPAN` fault incident tagged with exact coordinates, PIN code, and topology confidence.
 
 ### Noise Discrimination & False Positive Prevention
-1. **Isolated Dark Pole (Sensor Fault):** If Pole $P_k$ is dark, but ALL its downstream children $\{P_{k+1}, P_{k+2}\}$ are LIVE, this is physically impossible as a line fault. The system flags Pole $P_k$ as `DEAD_SENSOR` (broken IoT modem/lamp fuse) and suppresses control room alerts.
-2. **Scheduled Load Shedding:** Incoming outages are cross-matched against the `/scheduled-outages` feed with a $\pm 30$-minute overrun tolerance window. Matching outages are tagged `SCHEDULED_MAINTENANCE` and hidden from critical incident queues.
-3. **Multiple Simultaneous Faults:** Graph partitioning ensures independent branches failing during monsoons generate distinct tickets rather than merging into a single mega-fault.
+1. **Isolated Dark Pole (Sensor Fault):** Flagged via `hasEnergizedDescendants()` and suppressed from creating line break tickets.
+2. **Scheduled Load Shedding:** Checked against `scheduled_outages` table to suppress false alarms during planned maintenance.
+3. **Multiple Simultaneous Faults:** Graph boundary traversal isolates independent line breaks across separate branches into distinct tickets.
 
 ---
 

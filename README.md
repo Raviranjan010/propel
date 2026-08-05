@@ -48,7 +48,7 @@ The system will build all containers, run database migrations, and **automatical
 ## ⚡ Key Capabilities & Architecture Highlights
 
 1. **Sub-Minute Span Fault Localization:** Identifies the precise break span between Pole $P_n$ and Pole $P_{n+1}$, lat/lon GPS coordinates, and ward/PIN code in < 30 seconds.
-2. **Probabilistic Boundary Localization for 60% Unmapped Topology:** Uses spatial minimum spanning trees (MST), convex hull bounding, and historical co-outage graph clustering to localise faults even when `seq_on_line` and `parent_pole_id` are absent.
+2. **Nearest-Neighbor Boundary Localization for 60% Unmapped Topology:** Employs a greedy nearest-neighbor algorithm grown outward from DT coordinates with distance-decayed confidence (0.40 to 0.90) to localize faults when `seq_on_line` and `parent_pole_id` are absent.
 3. **Telemetry Ingestion & Noise Filtering:** Tolerates steady-state 39 msg/s and 5,000 msg bursts. Filters firmware 1.2 silent deaths, capacitor-reserve lost packets (30% loss rate), duplicate packets, clock skew ($\pm 90$s), and scheduled load shedding.
 4. **Telemetry-Verified Ticket Closure:** Tickets cannot be closed manually by a lineman. Auto-verifies restoration only when downstream pole heartbeats and `power_restored` telemetry confirm active current flow.
 5. **Interactive Fault Simulator:** Built-in web UI & CLI tool to inject single/multiple span faults, DT failures, feeder outages, scheduled load shedding, and dead IoT modems.

@@ -92,12 +92,12 @@ docker compose up --build -d
   ```
 
 ### 3. ARM64 (Apple Silicon M1/M2/M3) vs x86 Architecture Build Issues
-- **Symptom:** `exec format error` or slow emulation when building PostGIS images.
-- **Fix:** Dockerfile uses multi-arch base images. Ensure Docker Desktop has "Use Rosetta for x86/amd64 emulation" enabled.
+- **Symptom:** `exec format error` or slow emulation when building base container images.
+- **Fix:** Dockerfile uses multi-arch Node Alpine base image. Ensure Docker Desktop has "Use Rosetta for x86/amd64 emulation" enabled if building on Apple Silicon.
 
-### 4. WebSocket Upgrade Blocked Behind Reverse Proxy (Render/Nginx)
-- **Symptom:** UI falls back to polling; console error `WebSocket connection to 'wss://...' failed`.
-- **Fix:** Ensure HTTP headers `Upgrade` and `Connection: Upgrade` are passed in reverse proxy settings. The app automatically degrades gracefully to 3-second HTTP polling if WebSockets are blocked.
+### 4. HTTP Polling Delay Behind Reverse Proxy
+- **Symptom:** SCADA map or ticket queue updates slowly under network latency.
+- **Fix:** The frontend issues lightweight HTTP polling requests (`GET /api/tickets` and `GET /api/map/poles`) every 3 seconds. Ensure HTTP proxy buffering does not delay low-latency responses.
 
 ---
 

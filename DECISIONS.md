@@ -55,11 +55,10 @@ This document logs key design decisions, trade-offs, explicit assumptions, futur
 - **Date:** 2026-07-29
 - **Status:** APPROVED
 - **Context:** 60% of distribution transformers (DTs) have missing `seq_on_line` and `parent_pole_id` columns.
-- **Decision:** Implemented a hybrid model:
-  1. **Primary Spatial Delaunay/MST:** Reconstructs radial tree based on geographic proximity to DT.
-  2. **Co-Outage Graph Clustering:** Refines branch associations using historical telemetry co-occurrence.
-  3. **Degraded Spatial Bounding Corridor:** Where topology is ambiguous, system outputs a "High-Probability Span Corridor" polygon rather than guessing an exact single span.
-- **Rationale:** Ensures system remains high-trust and avoids sending linemen to wrong poles.
+- **Decision:** Implemented a dual-mode model:
+  1. **Primary Recorded Topology:** Uses explicit surveyed `parent_pole_id` where present (`source: explicit`, `confidence: 1.0`).
+  2. **Nearest-Neighbor Tree Builder:** For 60% unmapped DTs, synthesizes a directed tree outward from DT coordinates using greedy nearest-neighbor selection (`source: inferred`, distance-decayed `confidence: 0.40–0.90`).
+- **Rationale:** Ensures 100% network graph coverage without manual surveys while explicitly tagging inferred edges with proximity confidence.
 
 ---
 
@@ -72,12 +71,12 @@ This document logs key design decisions, trade-offs, explicit assumptions, futur
 
 ---
 
-### ADR 01: Ingestion Buffer via Redis Sliding Window
+### ADR 01: Telemetry Ingestion & PostgreSQL Sequence Deduplication
 - **Date:** 2026-07-27
 - **Status:** APPROVED
 - **Context:** Monsoon storms cause sudden telemetry bursts (5,000 msgs in 10s) and out-of-order packets.
-- **Decision:** Ingestion API accepts payloads asynchronously and pushes to Redis streams using monotonic `seq` indexing per device.
-- **Rationale:** Prevents database lock contention during burst events and handles $\pm 90\text{s}$ device clock skew.
+- **Decision:** Ingestion API accepts payloads asynchronously and performs deduplication via lookup on `(device_id, seq)` in `telemetry_events` in PostgreSQL, updating pole energized state only when `payload.seq >= max_seq`.
+- **Rationale:** Prevents duplicate processing, maintains sequence ordering, and eliminates lock contention during burst events.
 
 ---
 
@@ -93,7 +92,7 @@ This document logs key design decisions, trade-offs, explicit assumptions, futur
 
 1. **Dynamic Impedance & Distance-to-Fault Integration:** Support for smart meter voltage sag data to narrow unmapped 60% corridors down to sub-5-meter precision.
 2. **Field Lineman Mobile Web App:** A PWA interface allowing linemen to view real-time span boundaries on offline vector maps.
-3. **Automated Grid Topology Repair Suggestions:** Suggest permanent database fixes for the missing 60% topology based on learned co-outage graph structures.
+3. **Automated Grid Topology Survey Integration:** Incorporate physical GIS survey feedback to convert inferred topology edges into explicit surveyed edges.
 
 ---
 

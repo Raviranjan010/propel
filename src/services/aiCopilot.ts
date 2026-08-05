@@ -30,7 +30,7 @@ export function generateFallbackBriefing(input: BriefingInput): string {
 }
 
 export async function generateDispatchBriefing(input: BriefingInput): Promise<BriefingResult> {
-  const apiKey = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY || process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
 
   if (!apiKey || apiKey === 'mock-key-copilot-fallback') {
     return {
@@ -50,7 +50,7 @@ Generate a concise 2-sentence operator dispatch briefing for the following grid 
 Keep it professional, urgent, and concise for field crew dispatch.`;
 
   try {
-    const responseText = await callLlmWithTimeout(apiKey, prompt, 2000);
+    const responseText = await callLlmWithTimeout(apiKey, prompt, 2500);
     if (responseText && responseText.trim().length > 0) {
       return {
         briefing: responseText.trim(),
@@ -69,8 +69,13 @@ Keep it professional, urgent, and concise for field crew dispatch.`;
 
 function callLlmWithTimeout(apiKey: string, prompt: string, timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
+    const defaultModel = process.env.GROQ_API_KEY ? 'llama-3.3-70b-versatile' : 'gpt-3.5-turbo';
+    const defaultEndpoint = process.env.GROQ_API_KEY
+      ? 'https://api.groq.com/openai/v1/chat/completions'
+      : 'https://api.openai.com/v1/chat/completions';
+
     const postData = JSON.stringify({
-      model: process.env.LLM_MODEL || 'gpt-3.5-turbo',
+      model: process.env.LLM_MODEL || defaultModel,
       messages: [
         { role: 'system', content: 'You are an expert power grid SCADA dispatch copilot.' },
         { role: 'user', content: prompt }
@@ -79,7 +84,7 @@ function callLlmWithTimeout(apiKey: string, prompt: string, timeoutMs: number): 
       temperature: 0.3
     });
 
-    const apiUrl = process.env.LLM_API_ENDPOINT || 'https://api.openai.com/v1/chat/completions';
+    const apiUrl = process.env.LLM_API_ENDPOINT || defaultEndpoint;
     const parsedUrl = new URL(apiUrl);
     const transport = parsedUrl.protocol === 'https:' ? https : http;
 

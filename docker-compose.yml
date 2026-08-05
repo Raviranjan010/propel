@@ -6,15 +6,15 @@ services:
     container_name: kspdb_postgres
     restart: always
     environment:
-      POSTGRES_USER: kspdb
-      POSTGRES_PASSWORD: kspdb_pass
-      POSTGRES_DB: kspdb_db
+      POSTGRES_USER: ${POSTGRES_USER:-kspdb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kspdb_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-kspdb_db}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kspdb -d kspdb_db"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-kspdb} -d $${POSTGRES_DB:-kspdb_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -27,8 +27,9 @@ services:
       - "8000:8000"
     environment:
       NODE_ENV: production
-      PORT: 8000
-      DATABASE_URL: postgresql://kspdb:kspdb_pass@db:5432/kspdb_db
+      PORT: ${PORT:-8000}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://kspdb:kspdb_pass@db:5432/kspdb_db}
+      LLM_API_KEY: ${LLM_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy

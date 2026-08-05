@@ -3,6 +3,7 @@ import path from 'path';
 import { getDb, initDbSchema } from './db';
 import { processTelemetryEvent, syncFaultsAndTicketsForDt, TelemetryPayload } from './services/telemetryIngest';
 import { loadNetworkTreeFromDb, localizeFaults } from './services/localization';
+import { generateDispatchBriefing } from './services/aiCopilot';
 
 export const app = express();
 app.use(express.json());
@@ -54,6 +55,8 @@ app.get('/api/tickets', async (req: Request, res: Response) => {
         t.id as ticket_id,
         t.status,
         t.assigned_crew,
+        t.ai_briefing,
+        t.briefing_source,
         t.detected_at,
         t.updated_at,
         t.verified_at,
@@ -76,6 +79,50 @@ app.get('/api/tickets', async (req: Request, res: Response) => {
       ORDER BY t.id DESC
     `);
     res.json(result.rows);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/tickets/:id/briefing', async (req: Request, res: Response) => {
+  try {
+    const db = await getDb();
+    const ticketId = req.params.id;
+    const ticketRes = await db.query(
+      `SELECT t.id, f.* FROM tickets t JOIN faults f ON f.id = t.fault_id WHERE t.id = $1`,
+      [ticketId]
+    );
+
+    if (ticketRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    const fault = ticketRes.rows[0];
+    const briefingRes = await generateDispatchBriefing({
+      upstream_asset_id: fault.upstream_asset_id,
+      downstream_asset_id: fault.downstream_asset_id,
+      dt_id: fault.dt_id,
+      feeder_id: fault.feeder_id,
+      affected_pole_count: fault.affected_pole_count,
+      pincode: fault.pincode,
+      confidence: fault.confidence,
+      topology_source: fault.topology_source,
+      reason: fault.reason,
+      lat: fault.lat,
+      lon: fault.lon
+    });
+
+    await db.query(
+      `UPDATE tickets SET ai_briefing = $1, briefing_source = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3`,
+      [briefingRes.briefing, briefingRes.source, ticketId]
+    );
+
+    res.json({
+      success: true,
+      ticket_id: ticketId,
+      ai_briefing: briefingRes.briefing,
+      briefing_source: briefingRes.source
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

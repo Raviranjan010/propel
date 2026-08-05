@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.pglite_data/
+*.zip
+*.log
+.env
+.env.local
+.DS_Store
+Using/

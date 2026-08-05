@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KSPDB SCADA Grid Operator Console — Fault Localization System</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+    :root {
+      --bg-scada: #0B0F17;
+      --panel-bg: #151C28;
+      --panel-border: #26334D;
+      --text-main: #E2E8F0;
+      --text-muted: #94A3B8;
+      --color-live: #10B981;
+      --color-fault: #EF4444;
+      --color-inferred: #38BDF8;
+      --color-resolved: #64748B;
+      --font-sans: 'Inter', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-scada);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* SCADA Header Bar */
+    header {
+      background: var(--panel-bg);
+      border-bottom: 1px solid var(--panel-border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 60px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 12px;
+      height: 12px;
+      background: var(--color-live);
+      box-shadow: 0 0 10px var(--color-live);
+      border-radius: 2px;
+    }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #F8FAFC;
+    }
+
+    .system-status {
+      display: flex;
+      gap: 24px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .stat-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(38, 51, 77, 0.4);
+      padding: 4px 12px;
+      border: 1px solid var(--panel-border);
+      border-radius: 4px;
+    }
+
+    .stat-label {
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .stat-val {
+      font-weight: 600;
+      color: #FFF;
+    }
+
+    /* SCADA Main Console Workspace */
+    .console-workspace {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 60px);
+    }
+
+    /* Left 60%: Interactive Grid Canvas Map */
+    .map-container {
+      flex: 0 0 60%;
+      background: #070A0F;
+      border-right: 1px solid var(--panel-border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #gridCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    .map-legend {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      background: rgba(21, 28, 40, 0.9);
+      border: 1px solid var(--panel-border);
+      padding: 12px 16px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
+    /* Right 40%: Operational Ticket & Simulator Panel */
+    .control-panel {
+      flex: 0 0 40%;
+      display: flex;
+      flex-direction: column;
+      background: var(--panel-bg);
+      overflow-y: auto;
+    }
+
+    .panel-section {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Signature Element: Live Span Boundary Visualizer */
+    .span-visualizer {
+      background: #0D131E;
+      border: 1px solid var(--panel-border);
+      border-radius: 4px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+
+    .visualizer-title {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    }
+
+    .span-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #080C14;
+      padding: 12px;
+      border-radius: 4px;
+      border: 1px dashed var(--panel-border);
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .node-box {
+      padding: 6px 10px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+
+    .node-live {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid var(--color-live);
+      color: var(--color-live);
+    }
+
+    .node-dark {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid var(--color-fault);
+      color: var(--color-fault);
+    }
+
+    .span-wire {
+      flex: 1;
+      height: 2px;
+      background: var(--color-fault);
+      margin: 0 12px;
+      position: relative;
+    }
+
+    .span-wire::after {
+      content: '⚡ SPAN FAULT';
+      position: absolute;
+      top: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 9px;
+      color: var(--color-fault);
+      background: #080C14;
+      padding: 0 4px;
+      font-weight: 700;
+    }
+
+    /* Ticket Queue Cards */
+    .ticket-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .ticket-card {
+      background: #0D131E;
+      border: 1px solid var(--panel-border);
+      border-radius: 4px;
+      padding: 14px;
+      transition: border-color 0.15s ease;
+    }
+
+    .ticket-card.selected {
+      border-color: var(--color-inferred);
+    }
+
+    .ticket-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .ticket-id {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 13px;
+      color: #F8FAFC;
+    }
+
+    .badge {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      padding: 3px 8px;
+      border-radius: 2px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-explicit {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--color-live);
+      border: 1px solid var(--color-live);
+    }
+
+    .badge-inferred {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--color-inferred);
+      border: 1px solid var(--color-inferred);
+    }
+
+    .badge-detected {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--color-fault);
+    }
+
+    .badge-closed {
+      background: rgba(100, 116, 139, 0.2);
+      color: var(--color-resolved);
+    }
+
+    .ticket-details {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+      font-family: var(--font-mono);
+    }
+
+    .detail-item span {
+      color: var(--text-main);
+    }
+
+    .ticket-actions {
+      display: flex;
+      gap: 8px;
+      border-top: 1px solid rgba(38, 51, 77, 0.5);
+      padding-top: 10px;
+    }
+
+    .btn {
+      background: #1E293B;
+      color: #E2E8F0;
+      border: 1px solid var(--panel-border);
+      padding: 6px 12px;
+      font-size: 11px;
+      font-family: var(--font-sans);
+      font-weight: 600;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    .btn:hover {
+      background: #334155;
+    }
+
+    .btn-primary {
+      background: #2563EB;
+      border-color: #3B82F6;
+      color: #FFF;
+    }
+
+    .btn-primary:hover {
+      background: #1D4ED8;
+    }
+
+    .btn-success {
+      background: #059669;
+      border-color: #10B981;
+      color: #FFF;
+    }
+
+    .btn-danger {
+      background: #DC2626;
+      border-color: #EF4444;
+      color: #FFF;
+    }
+
+    /* Simulator Panel */
+    .sim-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: #0D131E;
+      padding: 12px;
+      border: 1px solid var(--panel-border);
+      border-radius: 4px;
+    }
+
+    .sim-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    input, select {
+      background: #080C14;
+      border: 1px solid var(--panel-border);
+      color: var(--text-main);
+      padding: 6px 10px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      border-radius: 3px;
+      flex: 1;
+    }
+
+    input:focus, select:focus, button:focus {
+      outline: 2px solid var(--color-inferred);
+      outline-offset: 1px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SCADA Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo"></div>
+      <div class="brand-title">KSPDB SCADA Operator Console (Karnataka Grid)</div>
+    </div>
+    <div class="system-status">
+      <div class="stat-badge">
+        <span class="stat-label">Total Poles:</span>
+        <span class="stat-val" id="statPoles">3,000</span>
+      </div>
+      <div class="stat-badge">
+        <span class="stat-label">Active Faults:</span>
+        <span class="stat-val" id="statFaults" style="color: var(--color-fault);">0</span>
+      </div>
+      <div class="stat-badge">
+        <span class="stat-label">Ingest Rate:</span>
+        <span class="stat-val">39 msg/s</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Console Workspace -->
+  <div class="console-workspace">
+    
+    <!-- Left: Interactive Vector Canvas Map -->
+    <div class="map-container">
+      <canvas id="gridCanvas"></canvas>
+      <div class="map-legend">
+        <div class="legend-item">
+          <div class="legend-dot" style="background: var(--color-live);"></div>
+          <span>Energized Pole / DT (Live)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: var(--color-fault);"></div>
+          <span>Faulted Pole (Dark)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: var(--color-live); height: 2px;"></div>
+          <span>Explicit Line Span (100% Conf)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background: var(--color-inferred); height: 2px;"></div>
+          <span>Inferred Line Span (MST Geometric)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Operational Control Panel -->
+    <div class="control-panel">
+
+      <!-- Signature Element: Live Span Boundary Visualizer -->
+      <div class="panel-section">
+        <div class="section-title">Selected Incident Span Boundary</div>
+        <div class="span-visualizer">
+          <div class="visualizer-title" id="visTitle">Select an active ticket to inspect live/dark boundary</div>
+          <div class="span-diagram">
+            <div class="node-box node-live" id="visUpstream">P-000001 (LIVE)</div>
+            <div class="span-wire"></div>
+            <div class="node-box node-dark" id="visDownstream">P-000002 (DARK)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Ticket Queue -->
+      <div class="panel-section" style="flex: 1;">
+        <div class="section-title">
+          <span>Active Grid Incident Tickets</span>
+          <button class="btn" onclick="fetchTickets()">Refresh</button>
+        </div>
+        <div class="ticket-list" id="ticketList">
+          <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); text-align: center; padding: 20px;">
+            No active grid faults detected. Network operating normally.
+          </div>
+        </div>
+      </div>
+
+      <!-- Fault Simulator Controls (Item 7) -->
+      <div class="panel-section">
+        <div class="section-title">Field Fault Simulator</div>
+        <div class="sim-controls">
+          <div class="sim-row">
+            <select id="simType">
+              <option value="SPAN">SPAN FAULT</option>
+              <option value="DT">DISTRIBUTION TRANSFORMER FAULT</option>
+              <option value="FEEDER">FEEDER FAULT</option>
+            </select>
+            <input type="text" id="simTarget" placeholder="Target ID (e.g. P-000006 or D-0001)" value="P-000006">
+          </div>
+          <div class="sim-row">
+            <button class="btn btn-danger" style="flex: 1;" onclick="injectFault()">Inject Fault</button>
+            <button class="btn btn-success" style="flex: 1;" onclick="repairFault()">Repair Fault</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let canvas, ctx;
+    let poles = [], edges = [], dts = [];
+    let tickets = [];
+    let selectedTicket = null;
+
+    async function init() {
+      canvas = document.getElementById('gridCanvas');
+      ctx = canvas.getContext('2d');
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      await loadMapData();
+      await fetchTickets();
+      setInterval(fetchTickets, 3000);
+    }
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+      renderMap();
+    }
+
+    async function loadMapData() {
+      try {
+        const res = await fetch('/api/map/poles');
+        const data = await res.json();
+        poles = data.poles;
+        edges = data.edges;
+        dts = data.dts;
+        document.getElementById('statPoles').innerText = poles.length.toLocaleString();
+        renderMap();
+      } catch (err) {
+        console.error('Error loading map data:', err);
+      }
+    }
+
+    async function fetchTickets() {
+      try {
+        const res = await fetch('/api/tickets');
+        tickets = await res.json();
+        const activeTickets = tickets.filter(t => t.status !== 'CLOSED');
+        document.getElementById('statFaults').innerText = activeTickets.length;
+        renderTickets();
+        await loadMapData();
+      } catch (err) {
+        console.error('Error fetching tickets:', err);
+      }
+    }
+
+    function renderMap() {
+      if (!ctx || poles.length === 0) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Compute bounding box for lat/lon
+      let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+      poles.forEach(p => {
+        if (p.lat < minLat) minLat = p.lat;
+        if (p.lat > maxLat) maxLat = p.lat;
+        if (p.lon < minLon) minLon = p.lon;
+        if (p.lon > maxLon) maxLon = p.lon;
+      });
+
+      const pad = 30;
+      const toX = (lon) => pad + ((lon - minLon) / (maxLon - minLon || 1)) * (canvas.width - 2 * pad);
+      const toY = (lat) => canvas.height - (pad + ((lat - minLat) / (maxLat - minLat || 1)) * (canvas.height - 2 * pad));
+
+      const polePos = new Map();
+      poles.forEach(p => polePos.set(p.pole_id, { x: toX(p.lon), y: toY(p.lat), is_energized: p.is_energized }));
+      dts.forEach(d => polePos.set(d.dt_id, { x: toX(d.lon), y: toY(d.lat), is_energized: true }));
+
+      // Render Topology Edges
+      edges.forEach(e => {
+        const p1 = polePos.get(e.parent_pole_id);
+        const p2 = polePos.get(e.child_pole_id);
+        if (p1 && p2) {
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.lineWidth = e.source === 'explicit' ? 1.5 : 1.0;
+          ctx.strokeStyle = e.source === 'explicit' ? '#10B981' : '#38BDF8';
+          if (e.source === 'inferred') ctx.setLineDash([3, 3]);
+          else ctx.setLineDash([]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      });
+
+      // Render Poles
+      poles.forEach(p => {
+        const pos = polePos.get(p.pole_id);
+        if (pos) {
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, 3, 0, Math.PI * 2);
+          ctx.fillStyle = p.is_energized ? '#10B981' : '#EF4444';
+          ctx.fill();
+        }
+      });
+
+      // Render DTs
+      dts.forEach(d => {
+        const pos = polePos.get(d.dt_id);
+        if (pos) {
+          ctx.fillStyle = '#F59E0B';
+          ctx.fillRect(pos.x - 5, pos.y - 5, 10, 10);
+        }
+      });
+    }
+
+    function renderTickets() {
+      const container = document.getElementById('ticketList');
+      if (tickets.length === 0) {
+        container.innerHTML = `<div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); text-align: center; padding: 20px;">No active grid faults detected. Network operating normally.</div>`;
+        return;
+      }
+
+      container.innerHTML = tickets.map(t => `
+        <div class="ticket-card ${selectedTicket?.ticket_id === t.ticket_id ? 'selected' : ''}" onclick="selectTicket(${t.ticket_id})">
+          <div class="ticket-header">
+            <span class="ticket-id">TICKET #${t.ticket_id} (${t.fault_type})</span>
+            <div>
+              <span class="badge ${t.topology_source === 'explicit' ? 'badge-explicit' : 'badge-inferred'}">${t.topology_source.toUpperCase()} TOPOLOGY</span>
+              <span class="badge ${t.status === 'CLOSED' ? 'badge-closed' : 'badge-detected'}">${t.status}</span>
+            </div>
+          </div>
+          <div class="ticket-details">
+            <div class="detail-item">Span: <span>${t.upstream_asset_id} → ${t.downstream_asset_id}</span></div>
+            <div class="detail-item">Coords: <span>${t.lat}, ${t.lon}</span></div>
+            <div class="detail-item">PIN Code: <span>${t.pincode || '560078'}</span></div>
+            <div class="detail-item">Affected Poles: <span>${t.affected_pole_count}</span></div>
+            <div class="detail-item">Confidence: <span>${(t.confidence * 100).toFixed(0)}%</span></div>
+          </div>
+          <div class="ticket-actions">
+            ${t.status === 'DETECTED' ? `<button class="btn btn-primary" onclick="updateStatus(${t.ticket_id}, 'acknowledge')">Acknowledge</button>` : ''}
+            ${t.status === 'ACKNOWLEDGED' ? `<button class="btn btn-primary" onclick="updateStatus(${t.ticket_id}, 'assign-crew')">Assign Crew</button>` : ''}
+            ${t.status === 'CREW_ASSIGNED' ? `<button class="btn btn-primary" onclick="updateStatus(${t.ticket_id}, 'resolve')">Mark Resolved</button>` : ''}
+            <button class="btn btn-success" onclick="verifyTicket(${t.ticket_id})">Verify Telemetry</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function selectTicket(id) {
+      selectedTicket = tickets.find(t => t.ticket_id === id);
+      if (selectedTicket) {
+        document.getElementById('visTitle').innerText = `SPAN ${selectedTicket.upstream_asset_id} ➔ ${selectedTicket.downstream_asset_id} (PIN ${selectedTicket.pincode || '560078'}, Conf: ${(selectedTicket.confidence * 100).toFixed(0)}%)`;
+        document.getElementById('visUpstream').innerText = `${selectedTicket.upstream_asset_id} (LIVE)`;
+        document.getElementById('visDownstream').innerText = `${selectedTicket.downstream_asset_id} (DARK)`;
+      }
+      renderTickets();
+    }
+
+    async function updateStatus(id, action) {
+      try {
+        await fetch(`/api/tickets/${id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ crew: 'Crew Alpha' }) });
+        await fetchTickets();
+      } catch (err) {
+        alert('Action failed: ' + err.message);
+      }
+    }
+
+    async function verifyTicket(id) {
+      try {
+        const res = await fetch(`/api/tickets/${id}/verify`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Verification Rejected: ${data.message}`);
+        } else {
+          alert('Telemetry verified! Ticket closed successfully.');
+        }
+        await fetchTickets();
+      } catch (err) {
+        alert('Verification error: ' + err.message);
+      }
+    }
+
+    async function injectFault() {
+      const type = document.getElementById('simType').value;
+      const target = document.getElementById('simTarget').value;
+      await fetch('/api/simulator/inject-fault', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fault_type: type, target_id: target })
+      });
+      await fetchTickets();
+    }
+
+    async function repairFault() {
+      const type = document.getElementById('simType').value;
+      const target = document.getElementById('simTarget').value;
+      await fetch('/api/simulator/repair-fault', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fault_type: type, target_id: target })
+      });
+      await fetchTickets();
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>

@@ -19,8 +19,8 @@ export async function getDb() {
     };
   } else {
     if (!pgliteInstance) {
-      // In-memory mode for zero-lock-contention lightning-fast execution
-      pgliteInstance = new PGlite();
+      // Local disk-backed PGlite instance for single-container & local execution
+      pgliteInstance = new PGlite('./.pglite_data');
     }
     return {
       query: async (text: string, params?: any[]) => {

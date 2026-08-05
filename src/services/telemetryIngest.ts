@@ -1,6 +1,7 @@
 import { getDb } from '../db';
 import { loadNetworkTreeFromDb, localizeFaults } from './localization';
 import { PoleState, ScheduledOutage } from './types';
+import { generateDispatchBriefing } from './aiCopilot';
 
 export interface TelemetryPayload {
   device_id: string;
@@ -148,10 +149,13 @@ export async function syncFaultsAndTicketsForDt(dtId: string) {
       );
       const newFaultId = insertFaultRes.rows[0].id;
 
-      // Create new ticket in DETECTED status
+      // Generate AI/Fallback Dispatch Briefing
+      const briefingRes = await generateDispatchBriefing(fault);
+
+      // Create new ticket in DETECTED status with AI briefing
       await db.query(
-        `INSERT INTO tickets (fault_id, status) VALUES ($1, 'DETECTED')`,
-        [newFaultId]
+        `INSERT INTO tickets (fault_id, status, ai_briefing, briefing_source) VALUES ($1, 'DETECTED', $2, $3)`,
+        [newFaultId, briefingRes.briefing, briefingRes.source]
       );
     }
   }

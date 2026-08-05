@@ -25,14 +25,14 @@ cp .env.example .env
 
 | Variable Name | Required | Default Value | Description |
 | :--- | :---: | :--- | :--- |
-| `NODE_ENV` | Yes | `production` | Node runtime mode (`development` / `production`) |
-| `PORT` | Yes | `8000` | Ingestion API & Backend HTTP Port |
-| `FRONTEND_PORT` | Yes | `3000` | Operator Console UI Port |
+| `PORT` | Yes | `8000` | Ingestion API & SCADA Console Port |
 | `DATABASE_URL` | Yes | `postgresql://kspdb:kspdb_pass@db:5432/kspdb_db` | PostgreSQL connection string |
-| `REDIS_URL` | Yes | `redis://redis:6379` | Redis stream cache & deduplication URL |
+| `POSTGRES_USER` | Yes | `kspdb` | PostgreSQL database user |
+| `POSTGRES_PASSWORD` | Yes | `kspdb_pass` | PostgreSQL database password |
+| `POSTGRES_DB` | Yes | `kspdb_db` | PostgreSQL database name |
+| `LLM_API_KEY` | No | *(empty)* | Gemini/OpenAI API key for operator copilot (falls back to deterministic template if empty) |
 | `SEED_POLE_COUNT` | No | `5000` | Number of synthetic poles generated on startup |
 | `UNMAPPED_TOPOLOGY_RATIO` | No | `0.60` | Ratio of DTs with missing `seq_on_line` (60%) |
-| `LLM_API_KEY` | No | `mock-key-copilot-fallback` | OpenAI/Claude API Key for operator copilot |
 
 ---
 
@@ -45,10 +45,8 @@ docker compose up --build -d
 ```
 
 ### What happens on launch:
-1. `db` container initializes PostgreSQL with PostGIS extensions.
-2. `redis` container starts high-throughput deduplication cache.
-3. `backend` container runs database migrations, initializes network topology graphs, and seeds synthetic network data.
-4. `frontend` container compiles Next.js/React operator dashboard.
+1. `db` container initializes PostgreSQL database.
+2. `app` container compiles TypeScript, seeds synthetic network data, builds topology graphs, and launches the Express server on port 8000.
 
 ---
 
@@ -58,39 +56,39 @@ docker compose up --build -d
    ```bash
    docker compose ps
    ```
-   All services (`db`, `redis`, `backend`, `frontend`) should display `Up (healthy)`.
+   All services (`db`, `app`) should display `Up (healthy)`.
 
 2. **Verify Ingestion Health Endpoint:**
    ```bash
    curl http://localhost:8000/health
    ```
-   Expected response: `{"status":"healthy","database":"connected","redis":"connected","poles_loaded":5000}`.
+   Expected response: `{"status":"healthy","database":"connected","poles_loaded":3000}`.
 
 3. **Open Operator Console:**
-   Navigate to [http://localhost:3000](http://localhost:3000) in your web browser. You will immediately see the seeded Karnataka subdivision map with live pole statuses.
+   Navigate to [http://localhost:8000](http://localhost:8000) in your web browser. You will immediately see the seeded Karnataka subdivision map with live pole statuses and built-in fault simulator panel.
 
 4. **Run Automated End-to-End Verification Test:**
    ```bash
-   docker compose exec backend npm run test:e2e
+   docker compose exec app npm test
    ```
 
 ---
 
 ## 5. Troubleshooting Guide & Common Failure Modes
 
-### 1. Port 3000 or 8000 Already in Use
-- **Symptom:** `Error: listen EADDRINUSE: address already in use :::3000`.
-- **Fix:** Update `PORT` or `FRONTEND_PORT` in your `.env` file, or terminate conflicting local processes:
+### 1. Port 8000 Already in Use
+- **Symptom:** `Error: listen EADDRINUSE: address already in use :::8000`.
+- **Fix:** Update `PORT` in your `.env` file, or terminate conflicting local processes:
   ```bash
   # Windows PowerShell
-  Stop-Process -Id (Get-NetTCPConnection -LocalPort 3000).OwningProcess -Force
+  Stop-Process -Id (Get-NetTCPConnection -LocalPort 8000).OwningProcess -Force
   ```
 
 ### 2. Database Migration Race Condition on Startup
-- **Symptom:** Backend container crashes with `Connection refused at postgresql://db:5432`.
-- **Fix:** `docker-compose.yml` includes a `healthcheck` on the database container. If running manually, restart backend:
+- **Symptom:** App container crashes with `Connection refused at postgresql://db:5432`.
+- **Fix:** `docker-compose.yml` includes a `healthcheck` on the database container. If running manually, restart app:
   ```bash
-  docker compose restart backend
+  docker compose restart app
   ```
 
 ### 3. ARM64 (Apple Silicon M1/M2/M3) vs x86 Architecture Build Issues

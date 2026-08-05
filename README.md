@@ -1,8 +1,8 @@
 # Karnataka State Power Distribution Board (KSPDB) - Automated Fault Localization & Verification System
 
 [![Docker Compose](https://img.shields.io/badge/Docker-compose_up-blue.svg)](file:///d:/Temp/propel/docker-compose.yml)
-[![Live Demo](https://img.shields.io/badge/Live_Demo-Reachable_URL-green.svg)](https://kspdb-fault-locator.vercel.app)
-[![Demo Video](https://img.shields.io/badge/Demo_Video-5--Min_Loom-red.svg)](https://loom.com/share/kspdb-fault-localization-demo)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Reachable_URL-green.svg)]([REPLACE: real live deploy URL])
+[![Demo Video](https://img.shields.io/badge/Demo_Video-5--Min_Loom-red.svg)]([REPLACE: real demo video URL])
 
 > An end-to-end AI-assisted telemetry ingestion, fault localization, and automated ticket lifecycle management system built for the Karnataka State Power Distribution Board (KSPDB). Compresses the 2-hour manual pole-walking fault identification window down to **< 30 seconds**.
 
@@ -13,15 +13,14 @@
 Ensure you have Docker and Docker Compose installed.
 
 ```bash
-git clone https://github.com/raviranjan/kspdb-fault-locator.git
+git clone [REPLACE: real GitHub repo URL]
 cd kspdb-fault-locator
 docker compose up --build
 ```
 
-The system will build all containers, run database migrations, and **automatically seed a synthetic 5,000-pole network** across 4 substations, 31 feeders, and 412 distribution transformers (with 60% unmapped topology).
+The system will build all containers, run database migrations, and **automatically seed a synthetic network** across substations, feeders, and distribution transformers (with 60% unmapped topology).
 
-- **Operator Console & Dashboard:** [http://localhost:3000](http://localhost:3000)
-- **Fault Simulator Interface:** [http://localhost:3000/simulator](http://localhost:3000/simulator)
+- **Operator Console, Dashboard & Fault Simulator:** [http://localhost:8000](http://localhost:8000)
 - **REST & Telemetry Ingestion API:** [http://localhost:8000](http://localhost:8000)
 - **API Health Check:** `curl http://localhost:8000/health`
 
@@ -29,9 +28,9 @@ The system will build all containers, run database migrations, and **automatical
 
 ## 🌐 Public Deliverables
 
-- **Public Repository (GitHub):** [https://github.com/raviranjan/kspdb-fault-locator](https://github.com/raviranjan/kspdb-fault-locator)
-- **Live Public URL:** [https://kspdb-fault-locator.vercel.app](https://kspdb-fault-locator.vercel.app) *(Note: Hosted on free-tier Render/Vercel with auto-cold-start, please allow up to 20s on first load)*
-- **5-Minute Demo Video:** [https://loom.com/share/kspdb-fault-localization-demo](https://loom.com/share/kspdb-fault-localization-demo)
+- **Public Repository (GitHub):** [REPLACE: real GitHub repo URL]
+- **Live Public URL:** [REPLACE: real live deploy URL] *(Note: Hosted on free-tier platform with auto-cold-start, please allow up to 20s on first load)*
+- **5-Minute Demo Video:** [REPLACE: real demo video URL]
 
 ---
 

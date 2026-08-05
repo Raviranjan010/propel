@@ -182,11 +182,14 @@ System Rejects Closure              Ticket Auto-Verified & CLOSED
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/api/v1/telemetry` | Ingestion endpoint for IoT pole devices |
-| `GET` | `/api/v1/incidents` | Active incidents list with status, confidence, & span coords |
-| `GET` | `/api/v1/incidents/:id` | Detailed incident record including downstream tree map |
-| `POST` | `/api/v1/incidents/:id/acknowledge` | Operator acknowledgment endpoint |
-| `POST` | `/api/v1/incidents/:id/resolve` | Lineman resolution request (triggers auto-verification) |
-| `POST` | `/api/v1/simulator/inject-fault` | Simulator endpoint for fault injection |
-| `POST` | `/api/v1/simulator/repair-fault` | Simulator endpoint for fault restoration |
-| `WS` | `/ws/live-feed` | WebSocket stream for real-time map & alert updates |
+| `GET` | `/health` | System health check returning database status and loaded poles count |
+| `POST` | `/api/telemetry` | IoT telemetry ingestion endpoint for pole devices |
+| `GET` | `/api/tickets` | Retrieve all tickets with joined fault details, status, and briefings |
+| `POST` | `/api/tickets/:id/briefing` | Generate or fetch Gemini AI copilot dispatch briefing for a ticket |
+| `POST` | `/api/tickets/:id/acknowledge` | Acknowledge ticket by control room operator |
+| `POST` | `/api/tickets/:id/assign-crew` | Assign maintenance crew to active ticket |
+| `POST` | `/api/tickets/:id/resolve` | Mark ticket as resolved by field lineman |
+| `POST` | `/api/tickets/:id/verify` | Telemetry-verified ticket closure endpoint; rejects if downstream poles are dark |
+| `POST` | `/api/simulator/inject-fault` | Simulator endpoint for SPAN, DT, or FEEDER fault injection |
+| `POST` | `/api/simulator/repair-fault` | Simulator endpoint for SPAN, DT, or FEEDER fault repair & auto-verification |
+| `GET` | `/api/map/poles` | Get raw network map data (poles, topology edges, transformers) |
